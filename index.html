@@ -38,19 +38,22 @@
         }
 
         // Function to plot the data
-        function plotBitcoinData(dates, transformedPrices, dateTransform, priceTransform) {
+        function plotBitcoinData(history, maps){
             const yticks = [1,10,100,1000,10000,100000,1000000]
             const years = Array.from({ length: 2030 - 2011 + 1 }, (_, i) => 2011 + i);
-            const yearTimestamps = years.map(year => dateTransform(new Date(`${year}-01-01T00:00:00Z`).getTime()/1000));
 
             const trace = {
-                x: dates,
-                y: transformedPrices,
+                x: history.date.map(maps.toDeltaYear),
+                y: history.price,
                 type: 'scatter',
                 mode: 'lines', // Only lines, no markers
-                name: 'Price',
-                line: { shape: 'spline', color: '#FFA500' } // Orange color for the line
+                name: 'Bitcoin Price',
+                line: { shape: 'spline', color: '#FFA500' }, // Orange color for the line
+                hoverinfo: 'x+y', // Show both x and y in hover
+                // hovertemplate: 'Date: %{new Date(maps.toDate(x) * 1000).toISOString()}<br>Price: $%{maps.toPrice(y):.2f}<extra></extra>', // Custom hover template
+                hovertemplate: 'Date: %{x}<br>Price: $%{y:.2f}<extra></extra>', // Custom hover template
             };
+            const style={gridcolor: '#333333',linecolor: '#ffffff',tickcolor: '#ffffff'}
 
             const layout = {
                 title: 'BTC',
@@ -59,19 +62,17 @@
                 font: { color: '#ffffff' }, // Light text color
                 xaxis: {
                     title: 'Date',
-                    tickvals: yearTimestamps,
+                    tickvals: years.map(x => maps.toDeltaYear(new Date(`${x}-01-01T00:00:00Z`).getTime()/1000)),
                     ticktext: years.map(String),
-                    gridcolor: '#333333', // Dark grid lines
-                    linecolor: '#ffffff', // Light axis line
-                    tickcolor: '#ffffff' // Light tick marks
+                    type:'log',
+                    ...style
                 },
                 yaxis: {
                     title: 'Price (USD)',
-                    tickvals: yticks.map(priceTransform),
+                    tickvals: yticks,
                     ticktext: yticks.map(x => x>1000?(x/1000).toString()+'k':x.toString()),
-                    gridcolor: '#333333', // Dark grid lines
-                    linecolor: '#ffffff', // Light axis line
-                    tickcolor: '#ffffff' // Light tick marks
+                    type:'log',
+                    ...style
                 }
             };
 
@@ -82,14 +83,17 @@
         // Fetch real Bitcoin data and combine it with hardcoded data
         async function main(){
             const history = await fetchBitcoinData();
-            const dateTransform = x => Math.log((x-history.date[0])/(60*60*24*365.25)+1)
-            const priceTransform = x => Math.log(x)
-
-            const transformedPrices = history.price.map(priceTransform);
-            const transformedDates = history.date.map(dateTransform);
+            const toDeltaYear = x => ((x-history.date[0])/(60*60*24*365.25)+1)
+            const fromDeltaYear = x => ((x-1)*(60*60*24*365.25)+history.date[0])
+            const fromDate = x => Math.log((x-history.date[0])/(60*60*24*365.25)+1)
+            const fromPrice = x => Math.log(x)
+            const toDate = x => (Math.exp(x)-1)*(60*60*24*365.25)+history.date[0]
+            const toPrice = x => Math.exp(x)
+            const toLog = x=>({price: x.price.map(fromPrice), date: x.date.map(fromDate)})
+            const fromLog = x=>({price: x.price.map(toPrice), date: x.date.map(toDate)})
 
             // Plot the transformed data with remapped labels
-            plotBitcoinData(transformedDates, transformedPrices, dateTransform, priceTransform);
+            plotBitcoinData(history, {toLog, fromLog, fromDate,fromPrice,toDate,toPrice,toDeltaYear,fromDeltaYear});
         }
         main()
     </script>
