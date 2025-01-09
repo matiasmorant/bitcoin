@@ -5,64 +5,73 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitcoin Price Log Scale</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #121212; /* Dark background for the page */
+            color: #ffffff; /* Light text color */
+        }
+        #plot {
+            width: 100%;
+            height: 100vh; /* Full viewport height */
+        }
+    </style>
 </head>
 <body>
-    <div id="plot" style="width:100%;max-width:800px;height:500px;margin:auto;"></div>
+    <div id="plot"></div>
 
     <script>
-        // Hardcoded sample Bitcoin price data (replace with real API later)
-        const hardcodedUnixDates = [1315969200, 1316055600, 1316142000, 1316228400, 1316314800];
-        const hardcodedPrices = [5.97, 5.53, 5.13, 4.85, 4.87];
-
-        // Convert UNIX timestamps to ISO date strings
-        const hardcodedDates = hardcodedUnixDates.map(timestamp => 
-            new Date(timestamp * 1000).toISOString().split('T')[0]
-        );
-        console.log(hardcodedDates);
-        // Function to fetch real Bitcoin price data from the CoinGecko API
         async function fetchBitcoinData() {
-            try {
-                const response = await fetch(
-                    'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30'
-                );
-                const data = await response.json();
+            const history = await fetch('./history.json').then(x=>x.json())
+        
+            const response = await fetch(
+                'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30'
+            );
+            const data = await response.json();
 
-                // Extract dates and prices from the API response
-                const apiPrices = data.prices;
-                const apiDates = apiPrices.map(item => new Date(item[0]).toISOString().split('T')[0]);
-                const apiValues = apiPrices.map(item => item[1]);
-
-                // Combine hardcoded and API data
-                const combinedDates = [...hardcodedDates, ...apiDates];
-                const combinedPrices = [...hardcodedPrices, ...apiValues];
-
-                // Plot the combined data
-                plotBitcoinData(combinedDates, combinedPrices);
-            } catch (error) {
-                console.error('Error fetching Bitcoin data:', error);
-            }
+            return {
+                date: [...history.date, ...data.prices.map(x => x[0]/1000)],
+                price: [...history.price, ...data.prices.map(x => x[1])]
+            };
         }
 
         // Function to plot the data
-        function plotBitcoinData(dates, prices) {
+        function plotBitcoinData(dates, transformedPrices, dateTransform, priceTransform) {
+            const yticks = [1,10,100,1000,10000,100000,1000000]
+            const years = Array.from({ length: 2030 - 2011 + 1 }, (_, i) => 2011 + i);
+            const yearTimestamps = years.map(year => dateTransform(new Date(`${year}-01-01T00:00:00Z`).getTime()/1000));
+
             const trace = {
                 x: dates,
-                y: prices,
+                y: transformedPrices,
                 type: 'scatter',
-                mode: 'lines+markers',
-                name: 'Bitcoin Price',
-                line: { shape: 'spline', color: 'orange' },
-                marker: { size: 8 }
+                mode: 'lines', // Only lines, no markers
+                name: 'Bitcoin Price (Log(Log))',
+                line: { shape: 'spline', color: '#FFA500' } // Orange color for the line
             };
 
             const layout = {
-                title: 'Bitcoin Price Over Time (Log Scale)',
+                title: 'Bitcoin Price Over Time (Log(Log)) Scale',
+                plot_bgcolor: '#121212', // Dark background for the plot
+                paper_bgcolor: '#121212', // Dark background for the surrounding area
+                font: { color: '#ffffff' }, // Light text color
                 xaxis: {
-                    title: 'Date'
+                    title: 'Date',
+                    tickvals: yearTimestamps,
+                    ticktext: years.map(String),
+                    gridcolor: '#333333', // Dark grid lines
+                    linecolor: '#ffffff', // Light axis line
+                    tickcolor: '#ffffff' // Light tick marks
                 },
                 yaxis: {
                     title: 'Price (USD)',
-                    type: 'log' // Logarithmic scale
+                    tickvals: yticks.map(priceTransform),
+                    ticktext: yticks.map(x => x>1000?(x/1000).toString()+'k':x.toString()),
+                    gridcolor: '#333333', // Dark grid lines
+                    linecolor: '#ffffff', // Light axis line
+                    tickcolor: '#ffffff' // Light tick marks
                 }
             };
 
@@ -71,7 +80,18 @@
         }
 
         // Fetch real Bitcoin data and combine it with hardcoded data
-        fetchBitcoinData();
+        async function main(){
+            const history = await fetchBitcoinData();
+            const dateTransform = x => Math.log((x-history.date[0])/(60*60*24*365.25)+1)
+            const priceTransform = x => Math.log(x)
+
+            const transformedPrices = history.price.map(priceTransform);
+            const transformedDates = history.date.map(dateTransform);
+
+            // Plot the transformed data with remapped labels
+            plotBitcoinData(transformedDates, transformedPrices, dateTransform, priceTransform);
+        }
+        main()
     </script>
 </body>
 </html>
