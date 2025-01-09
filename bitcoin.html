@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin Price Log Scale</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <div id="plot" style="width:100%;max-width:800px;height:500px;margin:auto;"></div>
+
+    <script>
+        // Hardcoded sample Bitcoin price data (replace with real API later)
+        const hardcodedUnixDates = [1315969200, 1316055600, 1316142000, 1316228400, 1316314800];
+        const hardcodedPrices = [5.97, 5.53, 5.13, 4.85, 4.87];
+
+        // Convert UNIX timestamps to ISO date strings
+        const hardcodedDates = hardcodedUnixDates.map(timestamp => 
+            new Date(timestamp * 1000).toISOString().split('T')[0]
+        );
+        console.log(hardcodedDates);
+        // Function to fetch real Bitcoin price data from the CoinGecko API
+        async function fetchBitcoinData() {
+            try {
+                const response = await fetch(
+                    'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30'
+                );
+                const data = await response.json();
+
+                // Extract dates and prices from the API response
+                const apiPrices = data.prices;
+                const apiDates = apiPrices.map(item => new Date(item[0]).toISOString().split('T')[0]);
+                const apiValues = apiPrices.map(item => item[1]);
+
+                // Combine hardcoded and API data
+                const combinedDates = [...hardcodedDates, ...apiDates];
+                const combinedPrices = [...hardcodedPrices, ...apiValues];
+
+                // Plot the combined data
+                plotBitcoinData(combinedDates, combinedPrices);
+            } catch (error) {
+                console.error('Error fetching Bitcoin data:', error);
+            }
+        }
+
+        // Function to plot the data
+        function plotBitcoinData(dates, prices) {
+            const trace = {
+                x: dates,
+                y: prices,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Bitcoin Price',
+                line: { shape: 'spline', color: 'orange' },
+                marker: { size: 8 }
+            };
+
+            const layout = {
+                title: 'Bitcoin Price Over Time (Log Scale)',
+                xaxis: {
+                    title: 'Date'
+                },
+                yaxis: {
+                    title: 'Price (USD)',
+                    type: 'log' // Logarithmic scale
+                }
+            };
+
+            const data = [trace];
+            Plotly.newPlot('plot', data, layout);
+        }
+
+        // Fetch real Bitcoin data and combine it with hardcoded data
+        fetchBitcoinData();
+    </script>
+</body>
+</html>
