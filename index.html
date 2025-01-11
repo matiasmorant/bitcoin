@@ -38,21 +38,28 @@
         }
 
         // Function to plot the data
-        function plotBitcoinData(history, maps){
-            const yticks = [1,10,100,1000,10000,100000,1000000]
-            const years = Array.from({ length: 2030 - 2011 + 1 }, (_, i) => 2011 + i);
+        function plotBitcoinData(history, mean, high, low, maps){
+            const yticks = [1,10,100,1000,10000,100000,1000000,10000000,100000000]
+            const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
 
-            const trace = {
-                x: history.date.map(maps.toDeltaYear),
-                y: history.price,
+            const line = (data, color)=>({
+                x: data.date.map(maps.toDeltaYear),
+                y: data.price,
                 type: 'scatter',
-                mode: 'lines', // Only lines, no markers
-                name: 'Bitcoin Price',
-                line: { shape: 'spline', color: '#FFA500' }, // Orange color for the line
+                mode: 'lines',
+                line: { shape: 'spline', color },
                 hoverinfo: 'x+y', // Show both x and y in hover
                 // hovertemplate: 'Date: %{new Date(maps.toDate(x) * 1000).toISOString()}<br>Price: $%{maps.toPrice(y):.2f}<extra></extra>', // Custom hover template
-                hovertemplate: 'Date: %{x}<br>Price: $%{y:.2f}<extra></extra>', // Custom hover template
-            };
+                hovertemplate: '%{text}<br>$%{y:.2f}<extra></extra>',
+                text: data.date.map(timestamp => new Date(timestamp * 1000).toISOString().split('T')[0]),
+                // name: 'Bitcoin Price',
+            })
+            const traces =[
+                line(history, '#FFA500'),
+                line(mean   , '#0000FF'),
+                line(high   , '#00FF00'),
+                line(low    , '#FF0000')
+            ];
             const style={gridcolor: '#333333',linecolor: '#ffffff',tickcolor: '#ffffff'}
 
             const layout = {
@@ -76,24 +83,34 @@
                 }
             };
 
-            const data = [trace];
-            Plotly.newPlot('plot', data, layout);
+            Plotly.newPlot('plot', traces, layout);
         }
 
-        // Fetch real Bitcoin data and combine it with hardcoded data
+        const yearbias=3.3
+        const model = (t, a,b,k,w,p)=>b*t**a/(1+k*Math.sin(w*t+p))
+        const [a,w,b,k,p,bh,kh,ph,bl,kl,pl] = [ 5.92114491,  1.65445324, Math.exp(-5.49207137),  0.70854187,  1.46784231, Math.exp(-4.26498827),  0.69911625,  1.7736018 , Math.exp(-6.21469651),  0.7291585, 1.35108577]
+        const mean = t=>model(t,a,b ,k ,w, p)
+        const high = t=>model(t,a,bh,kh,w,ph)
+        const low  = t=>model(t,a,bl,kl,w,pl)
+
         async function main(){
             const history = await fetchBitcoinData();
-            const toDeltaYear = x => ((x-history.date[0])/(60*60*24*365.25)+1)
-            const fromDeltaYear = x => ((x-1)*(60*60*24*365.25)+history.date[0])
-            const fromDate = x => Math.log((x-history.date[0])/(60*60*24*365.25)+1)
+            const toDeltaYear = x => ((x-history.date[0])/(60*60*24*365.25)+yearbias)
+            const fromDeltaYear = x => ((x-yearbias)*(60*60*24*365.25)+history.date[0])
+            const fromDate = x => Math.log(toDeltaYear(x))
             const fromPrice = x => Math.log(x)
-            const toDate = x => (Math.exp(x)-1)*(60*60*24*365.25)+history.date[0]
+            const toDate = x => fromDeltaYear(Math.exp(x))
             const toPrice = x => Math.exp(x)
             const toLog = x=>({price: x.price.map(fromPrice), date: x.date.map(fromDate)})
             const fromLog = x=>({price: x.price.map(toPrice), date: x.date.map(toDate)})
 
+            const longdate = [...history.date, ...Array.from({ length: 365*20 }, (_, i) => history.date[history.date.length - 1] + i * 60*60*24)];
+            console.log(longdate)
+            const meanData = {date: longdate, price: longdate.map(x=>mean(toDeltaYear(x)))}
+            const highData = {date: longdate, price: longdate.map(x=>high(toDeltaYear(x)))}
+            const lowData  = {date: longdate, price: longdate.map(x=>low (toDeltaYear(x)))}
             // Plot the transformed data with remapped labels
-            plotBitcoinData(history, {toLog, fromLog, fromDate,fromPrice,toDate,toPrice,toDeltaYear,fromDeltaYear});
+            plotBitcoinData(history, meanData, highData, lowData, {toLog, fromLog, fromDate,fromPrice,toDate,toPrice,toDeltaYear,fromDeltaYear});
         }
         main()
     </script>
