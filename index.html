@@ -13,106 +13,150 @@
             background-color: #121212; /* Dark background for the page */
             color: #ffffff; /* Light text color */
         }
-        #plot {
+        .plot {
             width: 100%;
             height: 100vh; /* Full viewport height */
         }
     </style>
 </head>
 <body>
-    <div id="plot"></div>
+    <div id="plot1" class="plot"></div>
+    <div id="plot2" class="plot"></div>
 
     <script>
         async function fetchBitcoinData() {
-            const history = await fetch('./history.json').then(x=>x.json())
-        
+            const history = await fetch('./history.json').then(x => x.json());
+
             const response = await fetch(
                 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30'
             );
             const data = await response.json();
 
             return {
-                date: [...history.date, ...data.prices.map(x => x[0]/1000)],
+                date: [...history.date, ...data.prices.map(x => x[0] / 1000)],
                 price: [...history.price, ...data.prices.map(x => x[1])]
             };
         }
 
-        // Function to plot the data
-        function plotBitcoinData(history, mean, high, low, maps){
-            const yticks = [1,10,100,1000,10000,100000,1000000,10000000,100000000]
+        function plotWave(data, maps, elementId) {
+            // const yticks = [-100000, -50000, 0, 50000, 100000];
             const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
 
-            const line = (data, color)=>({
+            const line = (data, color) => ({
                 x: data.date.map(maps.toDeltaYear),
                 y: data.price,
                 type: 'scatter',
                 mode: 'lines',
                 line: { shape: 'spline', color },
-                hoverinfo: 'x+y', // Show both x and y in hover
-                // hovertemplate: 'Date: %{new Date(maps.toDate(x) * 1000).toISOString()}<br>Price: $%{maps.toPrice(y):.2f}<extra></extra>', // Custom hover template
+                hoverinfo: 'x+y',
                 hovertemplate: '%{text}<br>$%{y:.2f}<extra></extra>',
                 text: data.date.map(timestamp => new Date(timestamp * 1000).toISOString().split('T')[0]),
-                // name: 'Bitcoin Price',
-            })
-            const traces =[
-                line(history, '#FFA500'),
-                line(mean   , '#0000FF'),
-                line(high   , '#00FF00'),
-                line(low    , '#FF0000')
-            ];
-            const style={gridcolor: '#333333',linecolor: '#ffffff',tickcolor: '#ffffff'}
+            });
+
+            const traces = [line(data, '#FFA500')];
+            const style = { gridcolor: '#333333', linecolor: '#ffffff', tickcolor: '#ffffff' };
 
             const layout = {
-                title: 'BTC',
-                plot_bgcolor: '#121212', // Dark background for the plot
-                paper_bgcolor: '#121212', // Dark background for the surrounding area
-                font: { color: '#ffffff' }, // Light text color
+                title: 'Power Law relative error',
+                plot_bgcolor: '#121212',
+                paper_bgcolor: '#121212',
+                font: { color: '#ffffff' },
                 xaxis: {
                     title: 'Date',
-                    tickvals: years.map(x => maps.toDeltaYear(new Date(`${x}-01-01T00:00:00Z`).getTime()/1000)),
+                    tickvals: years.map(x => maps.toDeltaYear(new Date(`${x}-01-01T00:00:00Z`).getTime() / 1000)),
                     ticktext: years.map(String),
-                    type:'log',
+                    ...style
+                },
+                yaxis: {
+                    title: 'error',
+                    // tickvals: yticks,
+                    // ticktext: yticks.map(x => x),
+                    ...style
+                }
+            };
+
+            Plotly.newPlot(elementId, traces, layout);
+        }
+
+        function plotBitcoinData(history, mean, high, low, maps, elementId) {
+            const yticks = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000];
+            const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
+
+            const line = (data, color) => ({
+                x: data.date.map(maps.toDeltaYear),
+                y: data.price,
+                type: 'scatter',
+                mode: 'lines',
+                line: { shape: 'spline', color },
+                hoverinfo: 'x+y',
+                hovertemplate: '%{text}<br>$%{y:.2f}<extra></extra>',
+                text: data.date.map(timestamp => new Date(timestamp * 1000).toISOString().split('T')[0]),
+            });
+
+            const traces = [
+                line(history, '#FFA500'),
+                line(mean, '#0000FF'),
+                line(high, '#00FF00'),
+                line(low, '#FF0000')
+            ];
+
+            const style = { gridcolor: '#333333', linecolor: '#ffffff', tickcolor: '#ffffff' };
+
+            const layout = {
+                title: 'BTC Price Log Scale',
+                plot_bgcolor: '#121212',
+                paper_bgcolor: '#121212',
+                font: { color: '#ffffff' },
+                xaxis: {
+                    title: 'Date',
+                    tickvals: years.map(x => maps.toDeltaYear(new Date(`${x}-01-01T00:00:00Z`).getTime() / 1000)),
+                    ticktext: years.map(String),
+                    type: 'log',
                     ...style
                 },
                 yaxis: {
                     title: 'Price (USD)',
                     tickvals: yticks,
-                    ticktext: yticks.map(x => x>1000?(x/1000).toString()+'k':x.toString()),
-                    type:'log',
+                    ticktext: yticks.map(x => x > 1000 ? (x / 1000).toString() + 'k' : x.toString()),
+                    type: 'log',
                     ...style
                 }
             };
 
-            Plotly.newPlot('plot', traces, layout);
+            Plotly.newPlot(elementId, traces, layout);
         }
 
-        const yearbias=3.3
-        const model = (t, a,b,k,w,p)=>b*t**a/(1+k*Math.sin(w*t+p))
-        const [a,w,b,k,p,bh,kh,ph,bl,kl,pl] = [ 5.92114491,  1.65445324, Math.exp(-5.49207137),  0.70854187,  1.46784231, Math.exp(-4.26498827),  0.69911625,  1.7736018 , Math.exp(-6.21469651),  0.7291585, 1.35108577]
-        const mean = t=>model(t,a,b ,k ,w, p)
-        const high = t=>model(t,a,bh,kh,w,ph)
-        const low  = t=>model(t,a,bl,kl,w,pl)
+        const yearbias = 3.3;
+        const model = (t, a, b, k, w, p) => b * t ** a / (1 + k * Math.sin(w * t + p));
+        const [a, w, b, k, p, bh, kh, ph, bl, kl, pl] = [5.92114491, 1.65445324, Math.exp(-5.49207137), 0.70854187, 1.46784231, Math.exp(-4.26498827), 0.69911625, 1.7736018, Math.exp(-6.21469651), 0.7291585, 1.35108577];
+        const mean = t => model(t, a, b, k, w, p);
+        const high = t => model(t, a, bh, kh, w, ph);
+        const low = t => model(t, a, bl, kl, w, pl);
 
-        async function main(){
+        async function main() {
             const history = await fetchBitcoinData();
-            const toDeltaYear = x => ((x-history.date[0])/(60*60*24*365.25)+yearbias)
-            const fromDeltaYear = x => ((x-yearbias)*(60*60*24*365.25)+history.date[0])
-            const fromDate = x => Math.log(toDeltaYear(x))
-            const fromPrice = x => Math.log(x)
-            const toDate = x => fromDeltaYear(Math.exp(x))
-            const toPrice = x => Math.exp(x)
-            const toLog = x=>({price: x.price.map(fromPrice), date: x.date.map(fromDate)})
-            const fromLog = x=>({price: x.price.map(toPrice), date: x.date.map(toDate)})
+            const toDeltaYear = x => ((x - history.date[0]) / (60 * 60 * 24 * 365.25) + yearbias);
+            const fromDeltaYear = x => ((x - yearbias) * (60 * 60 * 24 * 365.25) + history.date[0]);
+            const fromDate = x => Math.log(toDeltaYear(x));
+            const fromPrice = x => Math.log(x);
+            const toDate = x => fromDeltaYear(Math.exp(x));
+            const toPrice = x => Math.exp(x);
+            const toLog = x => ({ price: x.price.map(fromPrice), date: x.date.map(fromDate) });
+            const fromLog = x => ({ price: x.price.map(toPrice), date: x.date.map(toDate) });
 
-            const longdate = [...history.date, ...Array.from({ length: 365*20 }, (_, i) => history.date[history.date.length - 1] + i * 60*60*24)];
-            console.log(longdate)
-            const meanData = {date: longdate, price: longdate.map(x=>mean(toDeltaYear(x)))}
-            const highData = {date: longdate, price: longdate.map(x=>high(toDeltaYear(x)))}
-            const lowData  = {date: longdate, price: longdate.map(x=>low (toDeltaYear(x)))}
-            // Plot the transformed data with remapped labels
-            plotBitcoinData(history, meanData, highData, lowData, {toLog, fromLog, fromDate,fromPrice,toDate,toPrice,toDeltaYear,fromDeltaYear});
+            const longdate = [...history.date, ...Array.from({ length: 365 * 20 }, (_, i) => history.date[history.date.length - 1] + i * 60 * 60 * 24)];
+
+            const meanData = { date: longdate, price: longdate.map(x => mean(toDeltaYear(x))) };
+            const highData = { date: longdate, price: longdate.map(x => high(toDeltaYear(x))) };
+            const lowData = { date: longdate, price: longdate.map(x => low(toDeltaYear(x))) };
+
+            plotBitcoinData(history, meanData, highData, lowData, { toLog, fromLog, fromDate, fromPrice, toDate, toPrice, toDeltaYear, fromDeltaYear }, 'plot1');
+
+            const sinprice = { date: history.date, price: history.price.map((p, i) => (p - b * toDeltaYear(history.date[i]) ** a) / p) };
+            plotWave(sinprice, { toLog, fromLog, fromDate, fromPrice, toDate, toPrice, toDeltaYear, fromDeltaYear }, 'plot2');
         }
-        main()
+
+        main();
     </script>
 </body>
 </html>
