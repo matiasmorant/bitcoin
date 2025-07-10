@@ -17,6 +17,14 @@
             width: 100%;
             height: 100vh; /* Full viewport height */
         }
+       @media (max-width: 767px) {
+            .plot {
+                /* Make height relative to viewport width to ensure it's wider than tall */
+                height: 65vw; /* Height is 65% of viewport width */
+                min-height: 300px; /* Minimum height to ensure readability on very small screens */
+                max-height: 450px; /* Maximum height to prevent it from getting too large on wider phones */
+            }
+       }
     </style>
 </head>
 <body>
@@ -28,7 +36,7 @@
             const history = await fetch('./history.json').then(x => x.json());
 
             const response = await fetch(
-                'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30'
+                'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365'
             );
             const data = await response.json();
 
@@ -123,7 +131,7 @@
                 }
             };
 
-            Plotly.newPlot(elementId, traces, layout);
+            Plotly.newPlot(elementId, traces, layout, { responsive: true });
         }
 
         const yearbias = 3.3;
