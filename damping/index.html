@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitcoin Price Log Scale</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: #121212; /* Dark background for the page */
+            color: #ffffff; /* Light text color */
+            font-family: sans-serif;
+        }
+        .plot {
+            width: 100%;
+            height: 700px;
+        }
+       @media (max-width: 767px) {
+            .plot {
+                /* Make height relative to viewport width to ensure it's wider than tall */
+                height: 65vw; /* Height is 65% of viewport width */
+                min-height: 300px; /* Minimum height to ensure readability on very small screens */
+                max-height: 450px; /* Maximum height to prevent it from getting too large on wider phones */
+            }
+       }
+       /* 2. Add styles for Tweakpane on a dark theme */
+       :root {
+            --tp-base-background-color: hsla(230, 5%, 20%, 0.8);
+            --tp-base-shadow-color: hsla(0, 0%, 0%, 0.2);
+            --tp-button-background-color: hsla(230, 5%, 30%, 1);
+            --tp-button-foreground-color: hsla(230, 5%, 80%, 1);
+            --tp-container-background-color: hsla(230, 5%, 15%, 0.5);
+            --tp-input-background-color: hsla(230, 5%, 15%, 1);
+            --tp-input-foreground-color: hsla(230, 5%, 80%, 1);
+            --tp-label-foreground-color: hsla(230, 5%, 65%, 1);
+       }
+       .tp-dfwv {
+           backdrop-filter: blur(4px);
+       }
+    </style>
+</head>
+<body>
+    <div id="plot1" class="plot"></div>
+    <div id="plot2" class="plot"></div>
+
+    <script type="module">
+        import {Pane} from 'https://cdn.jsdelivr.net/npm/tweakpane@4.0.3/dist/tweakpane.min.js';
+        async function fetchBitcoinData() {
+            const history = await fetch('../history.json').then(x => x.json());
+
+            const response = await fetch(
+                'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365'
+            );
+            const data = await response.json();
+
+            return {
+                date: [...history.date, ...data.prices.map(x => x[0] / 1000)],
+                price: [...history.price, ...data.prices.map(x => x[1])]
+            };
+        }
+
+        function plotWave(data, maps, elementId) {
+            const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
+            const line = (data, color) => ({
+                x: data.date.map(maps.toDeltaYear),
+                y: data.price,
+                type: 'scatter',
+                mode: 'lines',
+                line: { shape: 'spline', color },
+                hoverinfo: 'x+y',
+                hovertemplate: '%{text}<br>$%{y:.2f}<extra></extra>',
+                text: data.date.map(timestamp => new Date(timestamp * 1000).toISOString().split('T')[0]),
+            });
+
+            const traces = [line(data, '#FFA500')];
+            const style = { gridcolor: '#333333', linecolor: '#ffffff', tickcolor: '#ffffff' };
+            const layout = {
+                title: 'Power Law relative error',
+                plot_bgcolor: '#121212', paper_bgcolor: '#121212', font: { color: '#ffffff' },
+                xaxis: {
+                    title: 'Date',
+                    tickvals: years.map(x => maps.toDeltaYear(new Date(`${x}-01-01T00:00:00Z`).getTime() / 1000)),
+                    ticktext: years.map(String), ...style
+                },
+                yaxis: { title: 'error', ...style }
+            };
+            Plotly.newPlot(elementId, traces, layout);
+        }
+
+        function plotBitcoinData(history, mean, high, low, maps, elementId) {
+            const yticks = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000];
+            const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
+            const line = (data, color) => ({
+                x: data.date.map(maps.toDeltaYear),
+                y: data.price,
+                type: 'scatter', mode: 'lines', line: { shape: 'spline', color }, hoverinfo: 'x+y',
+                hovertemplate: '%{text}<br>$%{y:.2f}<extra></extra>',
+                text: data.date.map(timestamp => new Date(timestamp * 1000).toISOString().split('T')[0]),
+            });
+
+            const traces = [ line(history, '#FFA500'), line(mean, '#0000FF'), line(high, '#00FF00'), line(low, '#FF0000') ];
+            const style = { gridcolor: '#333333', linecolor: '#ffffff', tickcolor: '#ffffff' };
+            const layout = {
+                title: 'BTC Price Log Scale',
+                plot_bgcolor: '#121212', paper_bgcolor: '#121212', font: { color: '#ffffff' },
+                xaxis: {
+                    title: 'Date', type: 'log',
+                    tickvals: years.map(x => maps.toDeltaYear(new Date(`${x}-01-01T00:00:00Z`).getTime() / 1000)),
+                    ticktext: years.map(String), ...style
+                },
+                yaxis: {
+                    title: 'Price (USD)', type: 'log', tickvals: yticks,
+                    ticktext: yticks.map(x => x > 1000 ? (x / 1000).toString() + 'k' : x.toString()), ...style
+                }
+            };
+            Plotly.newPlot(elementId, traces, layout, { responsive: true });
+        }
+
+        async function main() {
+            // 3. Define parameters object with initial values
+            const PARAMS = {
+                a: 6.0,    w: 1.65, b_exp: -5.7,
+                kh: 0.95, kh_decay: 0.06,
+                k : 0.925, k_decay: 0.05,
+                kl: 0.9, kl_decay: 0.04,
+                bh: 1.75, bh_decay: 0.025,
+                bl: -0.54, bl_decay: 0.02,
+                ph: 1.77,
+                p : 1.47,
+                pl: 1.35,   
+            };
+
+            // 4. Setup Tweakpane controls
+            const pane = new Pane({ title: 'Model Parameters' });
+            pane.addBinding(PARAMS, 'a', { min: 4, max: 8, step: 0.01, label: 'a (power)' });
+            pane.addBinding(PARAMS, 'w', { min: 0, max: 5, step: 0.01, label: 'ω (freq)' });
+            pane.addBinding(PARAMS, 'b_exp', { min: -10, max: 0, step: 0.01, label: 'b (exp scale)' });
+            pane.addBinding(PARAMS, 'k', { min: 0, max: 1, step: 0.001, label: 'k (mean ampl)' });
+            pane.addBinding(PARAMS, 'k_decay', { min: 0, max: 1, step: 0.001, label: 'k decay' });
+            pane.addBinding(PARAMS, 'p', { min: 0, max: 2 * Math.PI, step: 0.01, label: 'φ (mean phase)' });
+
+            const highFolder = pane.addFolder({ title: 'High Band' });
+            highFolder.addBinding(PARAMS, 'bh', { min: 0, max: 5, step: 0.01, label: 'bh (delta)' });
+            highFolder.addBinding(PARAMS, 'bh_decay', { min: 0, max: 0.1, step: 0.001, label: 'delta (decay)' });
+            highFolder.addBinding(PARAMS, 'kh', { min: 0, max: 1, step: 0.001, label: 'kh (ampl)' });
+            highFolder.addBinding(PARAMS, 'kh_decay', { min: 0, max: 1, step: 0.001, label: 'k decay' });
+            highFolder.addBinding(PARAMS, 'ph', { min: 0, max: 2 * Math.PI, step: 0.01, label: 'φh (phase)' });
+
+            const lowFolder = pane.addFolder({ title: 'Low Band' });
+            lowFolder.addBinding(PARAMS, 'bl', { min: -2, max: 2, step: 0.01, label: 'bl (delta)' });
+            lowFolder.addBinding(PARAMS, 'bl_decay', { min: 0, max: 0.1, step: 0.001, label: 'delta (decay)' });
+            lowFolder.addBinding(PARAMS, 'kl', { min: 0, max: 1, step: 0.001, label: 'kl (ampl)' });
+            lowFolder.addBinding(PARAMS, 'kl_decay', { min: 0, max: 1, step: 0.001, label: 'k decay' });
+            lowFolder.addBinding(PARAMS, 'pl', { min: 0, max: 2 * Math.PI, step: 0.01, label: 'φl (phase)' });
+            
+            // Add metrics monitoring
+            const METRICS = {
+                under_low: 0,
+                over_high: 0,
+                rms_error: 0,
+                band_diff: 0,
+            };
+            const metricsFolder = pane.addFolder({ title: 'Model Fit Metrics' });
+            metricsFolder.addBinding(METRICS, 'under_low', {
+                readonly: true,
+                label: '% Under Low',
+                format: v => v.toFixed(2) + '%',
+            });
+            metricsFolder.addBinding(METRICS, 'over_high', {
+                readonly: true,
+                label: '% Over High',
+                format: v => v.toFixed(2) + '%',
+            });
+            metricsFolder.addBinding(METRICS, 'rms_error', {
+                readonly: true,
+                label: 'RMS Log Error',
+                format: v => v.toFixed(4),
+            });
+            metricsFolder.addBinding(METRICS, 'band_diff', {
+                readonly: true,
+                label: 'Mean Log Diff',
+                format: v => v.toFixed(4),
+            });
+
+            // Fetch data and setup coordinate mappers
+            const history = await fetchBitcoinData();
+            const yearbias = 3.3;
+            const toDeltaYear = x => ((x - history.date[0]) / (60 * 60 * 24 * 365.25) + yearbias);
+            const fromDeltaYear = x => ((x - yearbias) * (60 * 60 * 24 * 365.25) + history.date[0]);
+            const fromDate = x => Math.log(toDeltaYear(x));
+            const fromPrice = x => Math.log(x);
+            const toDate = x => fromDeltaYear(Math.exp(x));
+            const toPrice = x => Math.exp(x);
+            const mappers = { toDeltaYear, fromDeltaYear, fromDate, fromPrice, toDate, toPrice };
+            
+            const longdate = [...history.date, ...Array.from({ length: 365 * 20 }, (_, i) => history.date[history.date.length - 1] + i * 60 * 60 * 24)];
+
+            // 5. Create a function to redraw plots based on current PARAMS
+            function redraw() {
+                const b = Math.exp(PARAMS.b_exp);
+                const model = (t, a, b, k, w, p) => b * t ** a / (1 + k * Math.sin(w * t + p));
+
+                const mean = t => model(t, PARAMS.a, b, PARAMS.k*Math.exp(-PARAMS.k_decay*(t-yearbias)), PARAMS.w, PARAMS.p);
+                const high = t => model(t, PARAMS.a, b * (1 + PARAMS.bh * Math.exp(-PARAMS.bh_decay * (t - yearbias))), PARAMS.kh*Math.exp(-PARAMS.kh_decay*(t-yearbias)), PARAMS.w, PARAMS.ph);
+                const low  = t => model(t, PARAMS.a, b * (1 + PARAMS.bl * Math.exp(-PARAMS.bl_decay * (t - yearbias))), PARAMS.kl*Math.exp(-PARAMS.kl_decay*(t-yearbias)), PARAMS.w, PARAMS.pl);
+
+                // Calculate metrics
+                let underCount = 0;
+                let overCount = 0;
+                let rmsErrorSum = 0;
+                let bandDiffSum = 0;
+                const n = history.date.length;
+
+                for (let i = 0; i < n; i++) {
+                    const t = mappers.toDeltaYear(history.date[i]);
+                    const p = history.price[i];
+                    
+                    if (p <= 0) continue; // Avoid log(0) or log(<0) errors
+
+                    const lowVal = low(t);
+                    const highVal = high(t);
+                    const meanVal = mean(t);
+
+                    if (p < lowVal) underCount++;
+                    if (p > highVal) overCount++;
+                    
+                    const logError = Math.log(p) - Math.log(meanVal);
+                    rmsErrorSum += logError * logError;
+
+                    const logBandDiff = Math.log(highVal) - Math.log(lowVal);
+                    bandDiffSum += logBandDiff;
+                }
+
+                // Update METRICS object. Tweakpane will automatically update the display.
+                METRICS.under_low = (underCount / n) * 100;
+                METRICS.over_high = (overCount / n) * 100;
+                METRICS.rms_error = Math.sqrt(rmsErrorSum / n);
+                METRICS.band_diff = bandDiffSum / n;
+
+                const meanData = { date: longdate, price: longdate.map(x => mean(mappers.toDeltaYear(x))) };
+                const highData = { date: longdate, price: longdate.map(x => high(mappers.toDeltaYear(x))) };
+                const lowData = { date: longdate, price: longdate.map(x => low(mappers.toDeltaYear(x))) };
+                plotBitcoinData(history, meanData, highData, lowData, mappers, 'plot1');
+
+                const sinprice = { date: history.date, price: history.price.map((p, i) => (p - b * mappers.toDeltaYear(history.date[i]) ** PARAMS.a) / p) };
+                plotWave(sinprice, mappers, 'plot2');
+            }
+
+            // 6. Perform initial draw and set up event listener
+            redraw();
+            pane.on('change', redraw);
+        }
+
+        main();
+    </script>
+</body>
+</html>
