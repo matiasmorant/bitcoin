@@ -91,8 +91,8 @@
         }
 
         function plotBitcoinData(history, mean, high, low, maps, elementId) {
-            const yticks = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000];
-            const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
+            const yticks = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
+            const years = Array.from({ length: 2035 - 2011 + 1 }, (_, i) => 2011 + i);
             const line = (data, color) => ({
                 x: data.date.map(maps.toDeltaYear),
                 y: data.price,
@@ -114,7 +114,8 @@
                 yaxis: {
                     title: 'Price (USD)', type: 'log', tickvals: yticks,
                     ticktext: yticks.map(x => x > 1000 ? (x / 1000).toString() + 'k' : x.toString()), ...style
-                }
+                },
+                showlegend: false
             };
             Plotly.newPlot(elementId, traces, layout, { responsive: true });
         }
@@ -134,7 +135,7 @@
             };
 
             // 4. Setup Tweakpane controls
-            const pane = new Pane({ title: 'Model Parameters' });
+            const pane = new Pane({ title: 'Model Parameters', expanded: false });
             pane.addBinding(PARAMS, 'a', { min: 4, max: 8, step: 0.01, label: 'a (power)' });
             pane.addBinding(PARAMS, 'w', { min: 0, max: 5, step: 0.01, label: 'ω (freq)' });
             pane.addBinding(PARAMS, 'b_exp', { min: -10, max: 0, step: 0.01, label: 'b (exp scale)' });
@@ -196,7 +197,7 @@
             const toPrice = x => Math.exp(x);
             const mappers = { toDeltaYear, fromDeltaYear, fromDate, fromPrice, toDate, toPrice };
             
-            const longdate = [...history.date, ...Array.from({ length: 365 * 20 }, (_, i) => history.date[history.date.length - 1] + i * 60 * 60 * 24)];
+            const longdate = [...history.date, ...Array.from({ length: 365 * 10 }, (_, i) => history.date[history.date.length - 1] + i * 60 * 60 * 24)];
 
             // 5. Create a function to redraw plots based on current PARAMS
             function redraw() {
