@@ -135,7 +135,7 @@
             };
 
             // 4. Setup Tweakpane controls
-            const pane = new Pane({ title: 'Model Parameters', expanded: false });
+            const pane = new Pane({ title: 'Model Parameters', expanded: false, position: 'top-left' });
             pane.addBinding(PARAMS, 'a', { min: 4, max: 8, step: 0.01, label: 'a (power)' });
             pane.addBinding(PARAMS, 'w', { min: 0, max: 5, step: 0.01, label: 'ω (freq)' });
             pane.addBinding(PARAMS, 'b_exp', { min: -10, max: 0, step: 0.01, label: 'b (exp scale)' });
