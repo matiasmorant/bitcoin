@@ -87,8 +87,8 @@
         }
 
         function plotBitcoinData(history, mean, high, low, maps, elementId) {
-            const yticks = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000];
-            const years = Array.from({ length: 2045 - 2011 + 1 }, (_, i) => 2011 + i);
+            const yticks = [1, 10, 100, 1000, 10000, 100000, 1000000, 10000000];
+            const years = Array.from({ length: 2035 - 2011 + 1 }, (_, i) => 2011 + i);
 
             const line = (data, color) => ({
                 x: data.date.map(maps.toDeltaYear),
@@ -128,7 +128,8 @@
                     ticktext: yticks.map(x => x > 1000 ? (x / 1000).toString() + 'k' : x.toString()),
                     type: 'log',
                     ...style
-                }
+                },
+                showlegend: false
             };
 
             Plotly.newPlot(elementId, traces, layout, { responsive: true });
@@ -152,7 +153,7 @@
             const toLog = x => ({ price: x.price.map(fromPrice), date: x.date.map(fromDate) });
             const fromLog = x => ({ price: x.price.map(toPrice), date: x.date.map(toDate) });
 
-            const longdate = [...history.date, ...Array.from({ length: 365 * 20 }, (_, i) => history.date[history.date.length - 1] + i * 60 * 60 * 24)];
+            const longdate = [...history.date, ...Array.from({ length: 365 * 10 }, (_, i) => history.date[history.date.length - 1] + i * 60 * 60 * 24)];
 
             const meanData = { date: longdate, price: longdate.map(x => mean(toDeltaYear(x))) };
             const highData = { date: longdate, price: longdate.map(x => high(toDeltaYear(x))) };
